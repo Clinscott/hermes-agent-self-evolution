@@ -1,9 +1,10 @@
 """Configuration and hermes-agent repo discovery."""
 
 import os
+import yaml
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Dict, Any
 
 
 @dataclass
@@ -17,10 +18,13 @@ class EvolutionConfig:
     iterations: int = 10
     population_size: int = 5
 
-    # LLM configuration
-    optimizer_model: str = "openai/gpt-4.1"  # Model for GEPA reflections
-    eval_model: str = "openai/gpt-4.1-mini"  # Model for LLM-as-judge scoring
-    judge_model: str = "openai/gpt-4.1"  # Model for dataset generation
+    # LLM configuration - defaults to local, can override via env or config
+    optimizer_model: str = "local/model"  # Model for GEPA reflections
+    eval_model: str = "local/model"  # Model for LLM-as-judge scoring
+    judge_model: str = "local/model"  # Model for dataset generation
+    
+    # API base URL for local/custom models
+    api_base: Optional[str] = None  # e.g., "http://localhost:8080/v1"
 
     # Constraints
     max_skill_size: int = 15_000  # 15KB default
@@ -70,3 +74,63 @@ def get_hermes_agent_path() -> Path:
         "Cannot find hermes-agent repo. Set HERMES_AGENT_REPO env var "
         "or ensure it exists at ~/.hermes/hermes-agent"
     )
+
+
+def get_hermes_config() -> Dict[str, Any]:
+    """Load hermes config.yaml if available."""
+    config_path = Path.home() / ".hermes" / "config.yaml"
+    if config_path.exists():
+        with open(config_path) as f:
+            return yaml.safe_load(f) or {}
+    return {}
+
+
+def get_model_config() -> tuple[str, Optional[str]]:
+    """Get model name and API base from hermes config.
+    
+    Returns:
+        (model_name, api_base_url) tuple
+        
+    Priority:
+    1. EVOLUTION_MODEL env var (format: "provider/model" or "model|api_base")
+    2. Hermes config main provider
+    3. Local llama-server fallback
+    """
+    # Check env var override
+    env_model = os.getenv("EVOLUTION_MODEL")
+    if env_model:
+        if "|" in env_model:
+            model, base = env_model.split("|", 1)
+            return model, base
+        return env_model, None
+    
+    # Try hermes config
+    config = get_hermes_config()
+    if config:
+        # Use main model as default
+        main = config.get("main", {})
+        if main.get("model") and main.get("base_url"):
+            provider = main.get("provider", "openai")
+            model = main["model"]
+            # Normalize model name for DSPy/LiteLLM
+            if not "/" in model:
+                model = f"{provider}/{model}"
+            return model, main["base_url"]
+    
+    # Fallback to local llama-server
+    return "openai/model", "http://localhost:8080/v1"
+
+
+def get_skills_path() -> Path:
+    """Get the path to skills directory."""
+    hermes_path = get_hermes_agent_path()
+    skills_path = hermes_path / "skills"
+    if skills_path.exists():
+        return skills_path
+    
+    # Alternative: ~/.hermes/skills
+    alt_path = Path.home() / ".hermes" / "skills"
+    if alt_path.exists():
+        return alt_path
+    
+    raise FileNotFoundError("Cannot find skills directory")
