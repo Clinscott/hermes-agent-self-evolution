@@ -123,18 +123,19 @@ def discover_skills() -> List[str]:
     skills_path = get_skills_path()
     skills = []
     
-    for skill_file in skills_path.rglob("SKILL.md"):
-        # Get relative path parts to determine skill name
-        rel_path = skill_file.relative_to(skills_path)
-        # Category/skill_name format
-        parts = rel_path.parts
-        if len(parts) >= 2:
-            skill_name = f"{parts[-2]}/{parts[-1].replace('SKILL.md', '')}"
-        else:
-            skill_name = skill_file.parent.name
-        skills.append(skill_name)
+    for skill_dir in skills_path.iterdir():
+        if skill_dir.is_dir() and not skill_dir.name.startswith('.'):
+            # Each subdirectory is a category
+            category = skill_dir.name
+            for skill_subdir in skill_dir.iterdir():
+                if skill_subdir.is_dir() and not skill_subdir.name.startswith('.'):
+                    # Check for SKILL.md
+                    skill_file = skill_subdir / "SKILL.md"
+                    if skill_file.exists():
+                        skill_name = skill_subdir.name
+                        skills.append(f"{category}/{skill_name}")
     
-    return sorted(skills)
+    return sorted(set(skills))
 
 
 def select_next_skill(state: dict, strategy: str = "priority") -> str:

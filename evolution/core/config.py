@@ -122,15 +122,31 @@ def get_model_config() -> tuple[str, Optional[str]]:
 
 
 def get_skills_path() -> Path:
-    """Get the path to skills directory."""
-    hermes_path = get_hermes_agent_path()
-    skills_path = hermes_path / "skills"
-    if skills_path.exists():
-        return skills_path
+    """Get the path to skills directory.
     
-    # Alternative: ~/.hermes/skills
-    alt_path = Path.home() / ".hermes" / "skills"
-    if alt_path.exists():
-        return alt_path
+    Priority:
+    1. SKILLS_PATH env var
+    2. ~/.hermes/skills (active skills - user additions)
+    3. ~/.hermes/hermes-agent/skills (bundled skills)
+    """
+    # Check env var override
+    env_path = os.getenv("SKILLS_PATH")
+    if env_path:
+        p = Path(env_path).expanduser()
+        if p.exists():
+            return p
     
-    raise FileNotFoundError("Cannot find skills directory")
+    # Priority: active skills directory (user's additions)
+    active_path = Path.home() / ".hermes" / "skills"
+    if active_path.exists():
+        return active_path
+    
+    # Fallback: bundled skills with hermes-agent
+    bundled_path = Path.home() / ".hermes" / "hermes-agent" / "skills"
+    if bundled_path.exists():
+        return bundled_path
+    
+    raise FileNotFoundError(
+        "Cannot find skills directory. Set SKILLS_PATH env var "
+        "or ensure ~/.hermes/skills exists"
+    )
