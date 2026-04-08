@@ -93,8 +93,9 @@ def get_model_config() -> tuple[str, Optional[str]]:
         
     Priority:
     1. EVOLUTION_MODEL env var (format: "provider/model" or "model|api_base")
-    2. Hermes config main provider
-    3. Local llama-server fallback
+    2. Hermes config coding model (MiniMax for reasoning tasks)
+    3. Hermes config main model
+    4. Local llama-server fallback
     """
     # Check env var override
     env_model = os.getenv("EVOLUTION_MODEL")
@@ -104,15 +105,25 @@ def get_model_config() -> tuple[str, Optional[str]]:
             return model, base
         return env_model, None
     
-    # Try hermes config
+    # Try hermes config - prefer coding model for evolution (reasoning-heavy)
     config = get_hermes_config()
     if config:
-        # Use main model as default
-        main = config.get("main", {})
-        if main.get("model") and main.get("base_url"):
-            provider = main.get("provider", "openai")
-            model = main["model"]
+        # Use coding model (MiniMax M2.5) for evolution - better for reasoning
+        auxiliary = config.get("auxiliary", {})
+        coding = auxiliary.get("coding", {})
+        if coding.get("model") and coding.get("base_url"):
+            provider = coding.get("provider", "minimax")
+            model = coding["model"]
             # Normalize model name for DSPy/LiteLLM
+            if not "/" in model:
+                model = f"{provider}/{model}"
+            return model, coding["base_url"]
+        
+        # Fallback to main model
+        main = config.get("model", {})
+        if main.get("default") and main.get("base_url"):
+            provider = main.get("provider", "openai")
+            model = main["default"]
             if not "/" in model:
                 model = f"{provider}/{model}"
             return model, main["base_url"]

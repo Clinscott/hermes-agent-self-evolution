@@ -37,25 +37,42 @@ from evolution.core.config import (
 
 REPO_ROOT = Path(__file__).parent.parent.resolve()
 ROTATION_FILE = REPO_ROOT / "evolution-reports" / "rotation_state.json"
+# Priority skills for CTO Assistant evolution
+# Tier 1: Core development and reasoning
 PRIORITY_SKILLS = [
-    # High-value, frequently used skills - Tier 1
-    "code-review",
-    "systematic-debugging",
-    "test-driven-development",
-    "github-pr-workflow",
-    "frontend-ui-engineering",
-    # Tier 2
-    "plan",
-    "idea-refine",
-    "writing-plans",
-    "spec-driven-development",
-    "incremental-implementation",
-    # Tier 3
-    "context-engineering",
-    "security-and-hardening",
-    "performance-optimization",
-    "git-workflow-and-versioning",
-    "api-and-interface-design",
+    # Core development - essential for code review and debugging
+    "github/code-review",
+    "software-development/systematic-debugging",
+    "software-development/test-driven-development",
+    "software-development/code-review",
+    
+    # Planning and execution - essential for project management
+    "software-development/plan",
+    "software-development/planning-and-task-breakdown",
+    "software-development/writing-plans",
+    "software-development/spec-driven-development",
+    "software-development/incremental-implementation",
+    
+    # Architecture and design - essential for technical decisions
+    "software-development/api-and-interface-design",
+    "software-development/frontend-ui-engineering",
+    "software-development/security-and-hardening",
+    "software-development/performance-optimization",
+    
+    # Business operations - CTO/EnorthMedia focus
+    "business/enorth-crm",
+    "business/enorth-prospecting",
+    "business/enorth-lead-enrichment",
+    "enorth-management/nextstrat-scheduling",
+    
+    # DevOps - infrastructure management
+    "devops/hermes-watchdog",
+    "devops/corvus-git-hermes",
+    "github/github-pr-workflow",
+    
+    # Research and analysis
+    "research/duckduckgo-search",
+    "enorth-industry-research/enorth-industry-research",
 ]
 
 
