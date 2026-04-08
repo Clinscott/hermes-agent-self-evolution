@@ -1,4 +1,5 @@
-#!/usr/bin/env python3"""
+#!/usr/bin/env python3
+"""
 Autonomous Evolution Runner for Hermes Agent Self-Evolution.
 
 This script runs weekly to:
@@ -282,7 +283,7 @@ def generate_report(state: dict, metrics: dict, output_path: Path):
 - **Rotation Index:** {state.get('rotation_index', 0)}
 - **Attempt Count:** {state.get('attempt_count', 0)}
 - **Success Count:** {state.get('success_count', 0)}
-- **Last Skill:** {state.get('last_skill', 'none'}
+- **Last Skill:** {state.get('last_skill', 'none')}
 
 ## Output
 
