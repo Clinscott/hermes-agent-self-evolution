@@ -55,22 +55,32 @@ def load_skill(skill_path: Path) -> dict:
     }
 
 
-def find_skill(skill_name: str, hermes_agent_path: Path) -> Optional[Path]:
-    """Find a skill by name in the hermes-agent skills directory.
+def find_skill(skill_name: str, skills_path: Path) -> Optional[Path]:
+    """Find a skill by name in the skills directory.
 
     Searches recursively for a SKILL.md in a directory matching the skill name.
+    
+    Args:
+        skill_name: Name of the skill (or category/skill_name format)
+        skills_path: Path to the skills directory (e.g., ~/.hermes/skills)
     """
-    skills_dir = hermes_agent_path / "skills"
-    if not skills_dir.exists():
+    if not skills_path.exists():
         return None
 
+    # Handle category/skill_name format
+    if "/" in skill_name:
+        category, name = skill_name.split("/", 1)
+        potential_path = skills_path / category / name / "SKILL.md"
+        if potential_path.exists():
+            return potential_path
+
     # Direct match: skills/<category>/<skill_name>/SKILL.md
-    for skill_md in skills_dir.rglob("SKILL.md"):
+    for skill_md in skills_path.rglob("SKILL.md"):
         if skill_md.parent.name == skill_name:
             return skill_md
 
     # Fuzzy match: check the name field in frontmatter
-    for skill_md in skills_dir.rglob("SKILL.md"):
+    for skill_md in skills_path.rglob("SKILL.md"):
         try:
             content = skill_md.read_text()[:500]
             if f"name: {skill_name}" in content or f'name: "{skill_name}"' in content:
