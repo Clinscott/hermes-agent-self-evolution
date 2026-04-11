@@ -195,10 +195,34 @@ def run_evolution(skill_name: str, model: str, api_base: Optional[str]) -> Tuple
     # Set environment for DSPy/LiteLLM
     env = os.environ.copy()
     
+    # Load .env file for API keys
+    env_file = Path.home() / ".hermes" / ".env"
+    if env_file.exists():
+        with open(env_file) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, _, value = line.partition("=")
+                    key = key.strip()
+                    value = value.strip().strip('"').strip("'")
+                    # Set API key env vars
+                    if key.endswith("_API_KEY") or key.endswith("_BASE_URL"):
+                        env[key] = value
+    
     # Handle local models via api_base
     if api_base:
-        env["OPENAI_API_KEY"] = "local"
-        env["OPENAI_BASE_URL"] = api_base
+        # For OpenAI-compatible endpoints, set OPENAI vars
+        if "localhost" in api_base or "127.0.0.1" in api_base:
+            env["OPENAI_API_KEY"] = "local"
+            env["OPENAI_BASE_URL"] = api_base
+        # For MiniMax, ensure the key is set
+        elif "minimax" in api_base:
+            if "MINIMAX_API_KEY" not in env:
+                print("WARNING: MINIMAX_API_KEY not found in environment")
+        # For other providers, try OPENAI_API_KEY as fallback
+        else:
+            env["OPENAI_API_KEY"] = env.get("OPENAI_API_KEY", "local")
+            env["OPENAI_BASE_URL"] = api_base
     
     # Run evolve_skill.py
     cmd = [
