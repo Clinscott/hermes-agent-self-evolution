@@ -1,8 +1,8 @@
 """Wraps a SKILL.md file as a DSPy module for optimization.
 
 The key abstraction: a skill file becomes a parameterized DSPy module
-where the skill text is the optimizable parameter. GEPA can then
-mutate the skill text and evaluate the results.
+where the skill text is the optimizable parameter. GEPA/MIPROv2 can then
+mutate the skill instructions and evaluate the results.
 """
 
 import re
@@ -91,37 +91,72 @@ def find_skill(skill_name: str, skills_path: Path) -> Optional[Path]:
     return None
 
 
+def create_skill_signature(skill_text: str):
+    """Create a DSPy Signature for skill execution.
+    
+    The skill text becomes the signature's instructions, which optimizers
+    can modify. This is the key abstraction: skill text = optimizable instructions.
+    """
+    class SkillSignature(dspy.Signature):
+        """Complete a task following skill instructions.
+        
+        You are an AI agent following specific skill instructions to complete a task.
+        Read the skill instructions carefully and apply the procedure described.
+        Be thorough, accurate, and follow all steps in order.
+        """
+        task_input: str = dspy.InputField(desc="The task to complete")
+        output: str = dspy.OutputField(desc="Your response following the skill instructions")
+    
+    # Create a copy with the skill text as instructions
+    return SkillSignature.with_instructions(skill_text)
+
+
 class SkillModule(dspy.Module):
     """A DSPy module that wraps a skill file for optimization.
 
-    The skill text (body) is the parameter that GEPA optimizes.
-    On each forward pass, the module:
-    1. Uses the skill text as instructions
-    2. Processes the task input
-    3. Returns the agent's response
+    The skill instructions are stored as signature.instructions on the predictor.
+    GEPA/MIPROv2 optimizers will modify these instructions during compilation.
+    
+    Usage:
+        module = SkillModule(skill_text)
+        optimized = optimizer.compile(module, trainset=trainset, valset=valset)
+        evolved_text = optimized.get_skill_text()
     """
-
-    class TaskWithSkill(dspy.Signature):
-        """Complete a task following the provided skill instructions.
-
-        You are an AI agent following specific skill instructions to complete a task.
-        Read the skill instructions carefully and follow the procedure described.
-        """
-        skill_instructions: str = dspy.InputField(desc="The skill instructions to follow")
-        task_input: str = dspy.InputField(desc="The task to complete")
-        output: str = dspy.OutputField(desc="Your response following the skill instructions")
 
     def __init__(self, skill_text: str):
         super().__init__()
-        self.skill_text = skill_text
-        self.predictor = dspy.ChainOfThought(self.TaskWithSkill)
+        self._original_skill_text = skill_text
+        # Create signature with skill text as instructions
+        signature = create_skill_signature(skill_text)
+        self.predictor = dspy.ChainOfThought(signature)
 
     def forward(self, task_input: str) -> dspy.Prediction:
-        result = self.predictor(
-            skill_instructions=self.skill_text,
-            task_input=task_input,
-        )
+        """Execute the skill on a task.
+        
+        The predictor uses its signature's instructions (optimized by GEPA/MIPROv2)
+        to guide behavior.
+        """
+        result = self.predictor(task_input=task_input)
         return dspy.Prediction(output=result.output)
+
+    def get_skill_text(self) -> str:
+        """Extract the current skill instructions from the predictor.
+        
+        After optimization, this returns the EVOLVED skill text.
+        Before optimization, this returns the original skill text.
+        """
+        # Navigate to the inner Predict (ChainOfThought wraps Predict)
+        for name, pred in self.named_predictors():
+            if hasattr(pred, 'signature') and hasattr(pred.signature, 'instructions'):
+                return pred.signature.instructions
+        
+        # Fallback to stored value
+        return self._original_skill_text
+
+    @property
+    def skill_text(self) -> str:
+        """Backwards compatibility property. Returns get_skill_text()."""
+        return self.get_skill_text()
 
 
 def reassemble_skill(frontmatter: str, evolved_body: str) -> str:
