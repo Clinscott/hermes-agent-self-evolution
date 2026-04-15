@@ -122,7 +122,7 @@ class _MIPROv2WithBackoff:
         raise last_error
 
 
-def _gepa_available() -> tuple[bool, str]:
+def _gepa_available(optimizer_model: str = "openai/gpt-4.1-mini") -> tuple[bool, str]:
     """Check whether GEPA is usable in this DSPy version.
 
     Returns (True, reason) if usable, (False, reason) if not.
@@ -133,13 +133,17 @@ def _gepa_available() -> tuple[bool, str]:
         return False, "dspy.GEPA class does not exist"
 
     sig = inspect.signature(dspy.GEPA.__init__)
-    if "max_steps" not in sig.parameters:
-        return False, "dspy.GEPA.__init__ does not accept max_steps"
+    if "max_full_evals" not in sig.parameters:
+        return False, "dspy.GEPA.__init__ does not accept max_full_evals"
 
-    # Lightweight smoke test — instantiate without compiling
+    if "reflection_lm" not in sig.parameters:
+        return False, "dspy.GEPA.__init__ does not accept reflection_lm"
+
+    # Smoke test: instantiate with a real reflection LM
     try:
         dummy_metric = lambda *a, **k: 0.0  # noqa: E731
-        _ = dspy.GEPA(metric=dummy_metric, max_steps=1)
+        reflection_lm = dspy.LM(optimizer_model, temperature=1.0, max_tokens=256)
+        _ = dspy.GEPA(metric=dummy_metric, max_full_evals=1, reflection_lm=reflection_lm)
         return True, "GEPA smoke test passed"
     except Exception as e:
         return False, f"GEPA smoke test failed: {e}"
@@ -319,14 +323,16 @@ def evolve(
     start_time = time.time()
 
     # Check GEPA availability once before attempting it
-    gepa_ok, gepa_check_reason = _gepa_available()
+    gepa_ok, gepa_check_reason = _gepa_available(optimizer_model)
 
     if gepa_ok:
         console.print(f"\n[bold cyan]Running GEPA optimization ({iterations} iterations)...[/bold cyan]\n")
         console.print(f"  GEPA check: {gepa_check_reason}")
+        reflection_lm = dspy.LM(optimizer_model, temperature=1.0, max_tokens=512)
         optimizer = dspy.GEPA(
             metric=skill_fitness_metric,
-            max_steps=iterations,
+            max_full_evals=iterations,
+            reflection_lm=reflection_lm,
         )
         # Wrap compile() with backoff in case API overload hits mid-optimization
         last_error = None
