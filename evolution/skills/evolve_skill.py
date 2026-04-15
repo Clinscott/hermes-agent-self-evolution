@@ -414,12 +414,16 @@ def evolve(
 
     holdout_examples = dataset.to_dspy_examples("holdout")
 
+    # Recreate baseline module — compile() mutates baseline_module in-place,
+    # so we need a fresh instance to get true pre-evolution baseline scores.
+    baseline_module_for_scoring = SkillModule(skill["body"])
+
     baseline_scores = []
     evolved_scores = []
     for ex in holdout_examples:
-        # Score baseline
+        # Score baseline (fresh module, not the one modified by compile())
         with dspy.context(lm=lm):
-            baseline_pred = baseline_module(task_input=ex.task_input)
+            baseline_pred = baseline_module_for_scoring(task_input=ex.task_input)
             baseline_score = skill_fitness_metric(ex, baseline_pred)
             baseline_scores.append(baseline_score)
 
