@@ -186,11 +186,42 @@ def select_next_skill(state: dict, strategy: str = "priority") -> str:
         return available_skills[idx]
 
 
-def run_evolution(skill_name: str, model: str, api_base: Optional[str]) -> Tuple[bool, dict]:
+def _count_skill_lines(skill_name: str) -> int:
+    """Count lines in a skill's SKILL.md file for adaptive iteration budgeting."""
+    try:
+        skills_path = get_skills_path()
+        # skill_name format: "category/skill-name"
+        parts = skill_name.split("/")
+        if len(parts) == 2:
+            skill_path = skills_path / parts[0] / parts[1] / "SKILL.md"
+        else:
+            # Fallback: search by skill name across all categories
+            for skill_dir in skills_path.iterdir():
+                if not skill_dir.is_dir() or skill_dir.name.startswith("."):
+                    continue
+                for skill_subdir in skill_dir.iterdir():
+                    if skill_subdir.is_dir() and skill_subdir.name == skill_name:
+                        skill_path = skill_subdir / "SKILL.md"
+                        break
+                else:
+                    continue
+                break
+            else:
+                return 0
+        if skill_path.exists():
+            return len(skill_path.read_text(encoding="utf-8").splitlines())
+    except Exception:
+        pass
+    return 0
+
+
+def run_evolution(skill_name: str, model: str, api_base: Optional[str],
+                  iterations: int = 10) -> Tuple[bool, dict]:
     """Run the evolution experiment for a skill."""
     print(f"\n=== Evolving skill: {skill_name} ===")
     print(f"Model: {model}")
     print(f"API Base: {api_base}")
+    print(f"Iterations: {iterations} (adaptive)")
     
     # Set environment for DSPy/LiteLLM
     env = os.environ.copy()
@@ -229,7 +260,7 @@ def run_evolution(skill_name: str, model: str, api_base: Optional[str]) -> Tuple
         sys.executable,
         "-m", "evolution.skills.evolve_skill",
         "--skill", skill_name,
-        "--iterations", "10",
+        "--iterations", str(iterations),
         "--eval-source", "synthetic",
         "--optimizer-model", model,
         "--eval-model", model,
@@ -366,9 +397,19 @@ def main():
     # Select next skill
     skill_name = select_next_skill(state, strategy="priority")
     print(f"\nSelected skill: {skill_name}")
-    
+
+    # Adaptive iteration count — large skills need fewer iterations to fit budget
+    skill_lines = _count_skill_lines(skill_name)
+    if skill_lines > 300:
+        iterations = 2
+    elif skill_lines > 150:
+        iterations = 3
+    else:
+        iterations = 10
+    print(f"Skill size: {skill_lines} lines → {iterations} iterations")
+
     # Run evolution
-    success, metrics = run_evolution(skill_name, model, api_base)
+    success, metrics = run_evolution(skill_name, model, api_base, iterations=iterations)
     
     # Update rotation state
     state["last_skill"] = skill_name
