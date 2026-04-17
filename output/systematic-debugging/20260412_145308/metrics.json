@@ -1,0 +1,17 @@
+{
+  "skill_name": "systematic-debugging",
+  "timestamp": "20260412_145308",
+  "iterations": 3,
+  "optimizer_model": "minimax/MiniMax-M2.7",
+  "eval_model": "minimax/MiniMax-M2.7",
+  "baseline_score": 0.5759360269360269,
+  "evolved_score": 0.5857878787878787,
+  "improvement": 0.00985185185185189,
+  "baseline_size": 10020,
+  "evolved_size": 10020,
+  "train_examples": 10,
+  "val_examples": 5,
+  "holdout_examples": 5,
+  "elapsed_seconds": 315.70735907554626,
+  "constraints_passed": true
+}

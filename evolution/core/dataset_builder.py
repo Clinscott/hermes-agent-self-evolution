@@ -6,6 +6,7 @@ B) SessionDB mining — extract real usage patterns and score with LLM-as-judge
 C) Golden sets — hand-curated JSONL files
 """
 
+import ast
 import json
 import random
 from pathlib import Path
@@ -13,6 +14,37 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import dspy
+
+
+def _parse_json_flexible(text: str) -> list:
+    """Parse JSON, accepting both standard JSON and Python dict syntax."""
+    text = text.strip()
+    # Try strict JSON first
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    # Try Python literal syntax (single quotes, trailing commas)
+    try:
+        result = ast.literal_eval(text)
+        if isinstance(result, list):
+            return result
+        elif isinstance(result, dict):
+            return [result]
+    except (ValueError, SyntaxError):
+        pass
+    # Try extracting array from text
+    import re
+    match = re.search(r'\[[\s\S]*\]', text)
+    if match:
+        try:
+            return json.loads(match.group())
+        except json.JSONDecodeError:
+            try:
+                return ast.literal_eval(match.group())
+            except (ValueError, SyntaxError):
+                pass
+    raise ValueError(f"Could not parse JSON from: {text[:200]}")
 
 from evolution.core.config import EvolutionConfig
 
@@ -134,15 +166,9 @@ class SyntheticDatasetBuilder:
 
         # Parse the generated test cases
         try:
-            cases_raw = json.loads(result.test_cases)
-        except json.JSONDecodeError:
-            # Try to extract JSON from the response
-            import re
-            match = re.search(r'\[.*\]', result.test_cases, re.DOTALL)
-            if match:
-                cases_raw = json.loads(match.group())
-            else:
-                raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:200]}")
+            cases_raw = _parse_json_flexible(result.test_cases)
+        except ValueError:
+            raise ValueError(f"Could not parse test cases from LLM output: {result.test_cases[:500]}")
 
         examples = [
             EvalExample(
