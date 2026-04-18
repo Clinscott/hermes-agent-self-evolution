@@ -85,7 +85,9 @@ def find_skill(skill_name: str, skills_path: Path) -> Optional[Path]:
             content = skill_md.read_text()[:500]
             if f"name: {skill_name}" in content or f'name: "{skill_name}"' in content:
                 return skill_md
-        except Exception:
+        except (OSError, UnicodeDecodeError) as e:
+            import warnings
+            warnings.warn(f"Could not read {skill_md}: {e}")
             continue
 
     return None
