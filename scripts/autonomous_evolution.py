@@ -83,6 +83,7 @@ def run_cmd(cmd: List[str], cwd: Optional[Path] = None) -> Tuple[int, str, str]:
         cwd=cwd or REPO_ROOT,
         capture_output=True,
         text=True,
+        timeout=600,
     )
     return result.returncode, result.stdout, result.stderr
 
@@ -210,8 +211,8 @@ def _count_skill_lines(skill_name: str) -> int:
                 return 0
         if skill_path.exists():
             return len(skill_path.read_text(encoding="utf-8").splitlines())
-    except Exception:
-        pass
+    except (OSError, IOError, ValueError) as e:
+        print(f"WARNING: Could not count skill lines for {skill_name}: {e}")
     return 0
 
 
@@ -270,8 +271,8 @@ def run_evolution(skill_name: str, model: str, api_base: Optional[str],
     try:
         hermes_path = get_hermes_agent_path()
         cmd.extend(["--hermes-repo", str(hermes_path)])
-    except:
-        pass
+    except Exception as e:
+        print(f"WARNING: Could not resolve hermes-agent path: {e}")
     
     result = subprocess.run(
         cmd,
@@ -279,6 +280,7 @@ def run_evolution(skill_name: str, model: str, api_base: Optional[str],
         env=env,
         capture_output=True,
         text=True,
+        timeout=600,
     )
     
     success = result.returncode == 0
