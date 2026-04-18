@@ -25,6 +25,7 @@ Usage from evolve_skill.py:
 import json
 import re
 import random
+import warnings
 from pathlib import Path
 from typing import Optional
 
@@ -262,11 +263,11 @@ def _read_copilot_workspace(workspace_path: Path) -> str:
     if not workspace_path.exists():
         return ""
     try:
-        for line in workspace_path.read_text().split("\n"):
+        for line in workspace_path.read_text(encoding="utf-8").split("\n"):
             if line.startswith("cwd:"):
                 return line.split(":", 1)[1].strip()
-    except Exception:
-        pass
+    except (OSError, UnicodeDecodeError) as e:
+        warnings.warn(f"Failed to read workspace file {workspace_path}: {e}")
     return ""
 
 
@@ -368,7 +369,7 @@ class HermesSessionImporter:
 
         for session_file in session_files:
             try:
-                data = json.loads(session_file.read_text())
+                data = json.loads(session_file.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):
                 continue
 
@@ -524,7 +525,8 @@ class RelevanceFilter:
                                 **validated,
                             ))
 
-                except Exception:
+                except Exception as e:
+                    warnings.warn(f"LLM scoring failed for candidate: {e}")
                     errors += 1
 
                 progress.update(task, advance=1)
@@ -718,7 +720,7 @@ def _load_skill_text(skill_name: str, skills_dir: Optional[Path] = None) -> tupl
         for skill_dir in skills_dir.glob(pattern):
             skill_file = skill_dir / "SKILL.md"
             if skill_file.exists():
-                return skill_name, skill_file.read_text()
+                return skill_name, skill_file.read_text(encoding="utf-8")
 
     raise FileNotFoundError(f"Skill '{skill_name}' not found in {skills_dir}")
 

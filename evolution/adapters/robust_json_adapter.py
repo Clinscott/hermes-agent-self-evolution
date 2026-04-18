@@ -62,7 +62,7 @@ def _extract_fields(text: str, output_fields: list[str]) -> dict[str, str]:
                 for field in output_fields:
                     if field not in fields and field in repaired:
                         fields[field] = str(repaired[field])
-        except Exception:
+        except (json.JSONDecodeError, TypeError, ValueError):
             pass
 
     return fields
@@ -95,9 +95,11 @@ def robust_parse(self, signature: "Signature", completion: str) -> dict[str, Any
     # empty strings rather than crashing the evolution run.
     try:
         return _original_json_parse(self, signature, completion)
-    except Exception:
+    except (json.JSONDecodeError, TypeError, ValueError) as e:
         # Original parse rejected this input (e.g. Python set literal {20,}).
         # Fill any missing fields with empty string and return what we have.
+        import warnings
+        warnings.warn(f"JSONAdapter.parse fallback triggered: {e}")
         for field in output_fields:
             if field not in fields:
                 fields[field] = ""
