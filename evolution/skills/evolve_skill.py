@@ -308,8 +308,9 @@ def evolve(
     console.print(f"  Optimizer model: {optimizer_model}")
     console.print(f"  Eval model: {eval_model}")
 
-    # Configure DSPy
-    lm = dspy.LM(eval_model)
+    # Configure DSPy — max_tokens prevents LM response truncation (Apr 16: None → "{20,}" garbage → JSONAdapter crash)
+    # temperature=0 ensures deterministic scoring during evaluation
+    lm = dspy.LM(eval_model, max_tokens=2048, temperature=0.0)
     dspy.configure(lm=lm)
 
     # Create the baseline skill module
