@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hermes-agent-self-evolution"
 version = "0.1.0"
-description = "Evolutionary self-improvement for Hermes Agent — optimize skills, prompts, tool descriptions, and code using DSPy + GEPA"
+description = "Evolutionary self-improvement for Hermes Agent — optimize skills, prompts, tool descriptions, and code using DSPy + MIPROv2"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"

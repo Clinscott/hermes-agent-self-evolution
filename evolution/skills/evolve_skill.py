@@ -1,4 +1,4 @@
-"""Evolve a Hermes Agent skill using DSPy + GEPA/MIPROv2.
+"""Evolve a Hermes Agent skill using DSPy + MIPROv2.
 
 Usage:
     python -m evolution.skills.evolve_skill --skill github-code-review --iterations 10
@@ -122,33 +122,6 @@ class _MIPROv2WithBackoff:
         raise last_error
 
 
-def _gepa_available(optimizer_model: str = "openai/gpt-4.1-mini") -> tuple[bool, str]:
-    """Check whether GEPA is usable in this DSPy version.
-
-    Returns (True, reason) if usable, (False, reason) if not.
-    """
-    import inspect
-
-    if not hasattr(dspy, "GEPA"):
-        return False, "dspy.GEPA class does not exist"
-
-    sig = inspect.signature(dspy.GEPA.__init__)
-    if "max_full_evals" not in sig.parameters:
-        return False, "dspy.GEPA.__init__ does not accept max_full_evals"
-
-    if "reflection_lm" not in sig.parameters:
-        return False, "dspy.GEPA.__init__ does not accept reflection_lm"
-
-    # Smoke test: instantiate with a real reflection LM
-    try:
-        dummy_metric = lambda *a, **k: 0.0  # noqa: E731
-        reflection_lm = dspy.LM(optimizer_model, temperature=1.0, max_tokens=256)
-        _ = dspy.GEPA(metric=dummy_metric, max_full_evals=1, reflection_lm=reflection_lm)
-        return True, "GEPA smoke test passed"
-    except Exception as e:
-        return False, f"GEPA smoke test failed: {e}"
-
-
 # ── Main evolution function ────────────────────────────────────────────
 
 def evolve(
@@ -238,7 +211,7 @@ def evolve(
     if dry_run:
         console.print(f"\n[bold green]DRY RUN — setup validated successfully.[/bold green]")
         console.print(f"  Would generate eval dataset (source: {eval_source})")
-        console.print(f"  Would run GEPA/MIPRO optimization ({iterations} iterations)")
+        console.print(f"  Would run MIPRO optimization ({iterations} iterations)")
         console.print(f"  Would validate constraints and create PR")
         return
 
@@ -303,7 +276,7 @@ def evolve(
     if not all_pass:
         console.print("[yellow]⚠ Baseline skill has constraint violations — proceeding anyway[/yellow]")
 
-    # ── 4. Set up DSPy + GEPA optimizer ─────────────────────────────────
+    # ── 4. Set up DSPy + MIPROv2 optimizer ─────────────────────────────────
     console.print(f"\n[bold]Configuring optimizer[/bold]")
     console.print(f"  Optimizer model: {optimizer_model}")
     console.print(f"  Eval model: {eval_model}")
@@ -320,67 +293,24 @@ def evolve(
     trainset = dataset.to_dspy_examples("train")
     valset = dataset.to_dspy_examples("val")
 
-    # ── 5. Run GEPA/MIPRO optimization ─────────────────────────────────
+    # ── 5. Run MIPROv2 optimization ─────────────────────────────────────
     start_time = time.time()
 
-    # Check GEPA availability once before attempting it
-    gepa_ok, gepa_check_reason = _gepa_available(optimizer_model)
-
-    if gepa_ok:
-        console.print(f"\n[bold cyan]Running GEPA optimization ({iterations} iterations)...[/bold cyan]\n")
-        console.print(f"  GEPA check: {gepa_check_reason}")
-        reflection_lm = dspy.LM(optimizer_model, temperature=1.0, max_tokens=512)
-        optimizer = dspy.GEPA(
-            metric=skill_fitness_metric,
-            max_full_evals=iterations,
-            reflection_lm=reflection_lm,
+    console.print(f"\n[bold cyan]Running MIPROv2 optimization ({iterations} iterations)...[/bold cyan]\n")
+    optimizer = _MIPROv2WithBackoff(
+        metric=skill_fitness_metric,
+        auto="light",
+    )
+    try:
+        optimized_module = optimizer.compile(
+            baseline_module,
+            trainset=trainset,
         )
-        # Wrap compile() with backoff in case API overload hits mid-optimization
-        last_error = None
-        for attempt in range(4):  # 0..3 = 4 attempts total
-            try:
-                optimized_module = optimizer.compile(
-                    baseline_module,
-                    trainset=trainset,
-                    valset=valset,
-                )
-                gepa_message = "Optimizer: GEPA"
-                break
-            except Exception as e:
-                last_error = e
-                if attempt == 3:
-                    console.print(f"[yellow]GEPA compile failed after 4 attempts ({e}) — falling back to MIPROv2[/yellow]")
-                    optimizer = _MIPROv2WithBackoff(
-                        metric=skill_fitness_metric,
-                        auto="light",
-                    )
-                    optimized_module = optimizer.compile(
-                        baseline_module,
-                        trainset=trainset,
-                    )
-                    gepa_message = "Optimizer: MIPROv2 (GEPA exhausted retries)"
-                    break
-                jitter = random.uniform(0, 1)
-                backoff = 2.0 * (2 ** attempt) + jitter
-                console.print(f"[yellow]GEPA compile attempt {attempt+1} failed ({e}) — retrying in {backoff:.1f}s[/yellow]")
-                time.sleep(backoff)
-    else:
-        console.print(f"[yellow]GEPA unavailable ({gepa_check_reason}) — falling back to MIPROv2[/yellow]")
-        console.print(f"\n[bold cyan]Running MIPROv2 optimization ({iterations} iterations)...[/bold cyan]\n")
-        optimizer = _MIPROv2WithBackoff(
-            metric=skill_fitness_metric,
-            auto="light",
-        )
-        try:
-            optimized_module = optimizer.compile(
-                baseline_module,
-                trainset=trainset,
-            )
-            gepa_message = "Optimizer: MIPROv2 (GEPA unavailable)"
-        except Exception as e:
-            console.print(f"[red]✗ MIPROv2 also failed: {e}[/red]")
-            console.print("[red]✗ Evolution aborted — no optimizer available.[/red]")
-            sys.exit(1)
+        gepa_message = "Optimizer: MIPROv2"
+    except Exception as e:
+        console.print(f"[red]✗ MIPROv2 failed: {e}[/red]")
+        console.print("[red]✗ Evolution aborted — no optimizer available.[/red]")
+        sys.exit(1)
 
     elapsed = time.time() - start_time
     console.print(f"\n  {gepa_message} — completed in {elapsed:.1f}s")
@@ -506,17 +436,17 @@ def evolve(
 
 @click.command()
 @click.option("--skill", required=True, help="Name of the skill to evolve")
-@click.option("--iterations", default=10, help="Number of GEPA iterations")
+@click.option("--iterations", default=10, help="Number of MIPROv2 iterations")
 @click.option("--eval-source", default="synthetic", type=click.Choice(["synthetic", "golden", "sessiondb"]),
               help="Source for evaluation dataset")
 @click.option("--dataset-path", default=None, help="Path to existing eval dataset (JSONL)")
-@click.option("--optimizer-model", default="openai/gpt-4.1", help="Model for GEPA reflections")
+@click.option("--optimizer-model", default="openai/gpt-4.1", help="Model for MIPROv2 optimization")
 @click.option("--eval-model", default="openai/gpt-4.1-mini", help="Model for evaluations")
 @click.option("--hermes-repo", default=None, help="Path to hermes-agent repo")
 @click.option("--run-tests", is_flag=True, help="Run full pytest suite as constraint gate")
 @click.option("--dry-run", is_flag=True, help="Validate setup without running optimization")
 def main(skill, iterations, eval_source, dataset_path, optimizer_model, eval_model, hermes_repo, run_tests, dry_run):
-    """Evolve a Hermes Agent skill using DSPy + GEPA/MIPROv2 optimization."""
+    """Evolve a Hermes Agent skill using DSPy + MIPROv2 optimization."""
     evolve(
         skill_name=skill,
         iterations=iterations,

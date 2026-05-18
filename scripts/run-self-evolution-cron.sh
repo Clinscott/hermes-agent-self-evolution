@@ -16,7 +16,7 @@ TODAY=$(date +%Y-%m-%d)
 source "$VENV/bin/activate"
 
 # Read MiniMax API key from mmx config
-API_KEY=$(python3 -c "import json; print(json.load(open('$HOME/.mmx/config.json'))['api_key'])" 2>/dev/null || echo "")
+API_KEY=$(python3 -c "import json; print(json.load(open(\"$HOME/.mmx/config.json\"))['api_key'])" 2>/dev/null || echo "")
 if [[ -z "$API_KEY" ]]; then
     echo "ERROR: No MiniMax API key found in ~/.mmx/config.json"
     exit 1
